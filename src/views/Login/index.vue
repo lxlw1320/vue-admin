@@ -29,13 +29,23 @@
               <el-input v-model="ruleForm.code" maxlength="6"></el-input>
             </el-col>
             <el-col :span="9">
-              <el-button type="success" class="block">获取验证码</el-button>
+              <el-button
+                type="success"
+                class="block"
+                @click="getSms()"
+                :disabled="codeButtonStatus.status"
+              >{{ codeButtonStatus.text }}</el-button>
             </el-col>
           </el-row>
         </el-form-item>
 
         <el-form-item>
-          <el-button type="danger" @click="submitForm('ruleForm')" class="login-btn block">提交</el-button>
+          <el-button
+            type="danger"
+            @click="submitForm('ruleForm')"
+            class="login-btn block"
+            :disabled="loginButtonStatus"
+          >{{ menuTab[1].current ? '注册' : '登录' }}</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -43,6 +53,10 @@
 </template>
 
 <script>
+import sha1 from 'js-sha1'
+import { reactive, ref, onMounted } from '@vue/composition-api'
+import { GetSms, Register, Login } from '@/api/login'
+
 import {
   stripscript,
   validateEmail,
@@ -51,9 +65,13 @@ import {
 } from '@/utils/validate.js'
 export default {
   name: 'login',
-  data() {
+  // setup(props, context) {
+  /* 
+    attrs、emit、listeners、parent、refs、root
+    */
+  setup(props, { refs, root }) {
     // 验证用户名
-    var validateUsername = (rule, value, callback) => {
+    let validateUsername = (rule, value, callback) => {
       // let reg = /^([A-Za-z0-9_\-\.])+\@([A-Za-z0-9_\-\.])+\.([A-Za-z]{2,4})$/
       if (value === '') {
         callback(new Error('请输入用户名'))
@@ -64,9 +82,9 @@ export default {
       }
     }
     // 验证密码
-    var validatePassword = (rule, value, callback) => {
-      this.ruleForm.password = stripscript(value)
-      value = this.ruleForm.password
+    let validatePassword = (rule, value, callback) => {
+      ruleForm.password = stripscript(value)
+      value = ruleForm.password
       // let reg = /^(?!\D+$)(?![^a-zA-Z]+$)\S{6,20}$/
       if (value === '') {
         callback(new Error('请输入密码'))
@@ -77,22 +95,22 @@ export default {
       }
     }
     // 验证重复密码
-    var validatePasswords = (rule, value, callback) => {
-      this.ruleForm.passwords = stripscript(value)
-      value = this.ruleForm.passwords
+    let validatePasswords = (rule, value, callback) => {
+      ruleForm.passwords = stripscript(value)
+      value = ruleForm.passwords
       // let reg = /^(?!\D+$)(?![^a-zA-Z]+$)\S{6,20}$/
       if (value === '') {
         callback(new Error('请再次输入密码'))
-      } else if (value !== this.ruleForm.password) {
+      } else if (value !== ruleForm.password) {
         callback(new Error('重复密码不一致'))
       } else {
         callback()
       }
     }
     // 验证验证码
-    var validateCode = (rule, value, callback) => {
-      this.ruleForm.code = stripscript(value)
-      value = this.ruleForm.code
+    let validateCode = (rule, value, callback) => {
+      ruleForm.code = stripscript(value)
+      value = ruleForm.code
       // let reg = /^[a-z0-9]{6}$/
       if (value === '') {
         return callback(new Error('请输入验证码'))
@@ -102,48 +120,206 @@ export default {
         callback()
       }
     }
-    return {
-      menuTab: [
-        { txt: '登录', current: false },
-        { txt: '注册', current: true }
-      ],
-      ruleForm: {
-        username: '',
-        password: '',
-        code: ''
-      },
-      rules: {
-        username: [{ validator: validateUsername, trigger: 'blur' }],
-        password: [{ validator: validatePassword, trigger: 'blur' }],
-        passwords: [{ validator: validatePasswords, trigger: 'blur' }],
-        code: [{ validator: validateCode, trigger: 'blur' }]
+
+    // 对象reactive 变量ref
+    const menuTab = reactive([
+      { txt: '登录', current: false },
+      { txt: '注册', current: true }
+    ])
+
+    const ruleForm = reactive({
+      username: '',
+      password: '',
+      passwords: '',
+      code: ''
+    })
+
+    const rules = reactive({
+      username: [{ validator: validateUsername, trigger: 'blur' }],
+      password: [{ validator: validatePassword, trigger: 'blur' }],
+      passwords: [{ validator: validatePasswords, trigger: 'blur' }],
+      code: [{ validator: validateCode, trigger: 'blur' }]
+    })
+
+    const module = ref('register')
+
+    // 登录按钮禁用状态
+    const loginButtonStatus = ref(true)
+    // // 验证码按钮禁用状态
+    // const codeButtonStatus = ref(false)
+    // const codeButtonText = ref('发送验证码')
+
+    const codeButtonStatus = reactive({
+      status: false,
+      text: '获取验证码'
+    })
+
+    // 倒计时
+    const timer = ref(null)
+    // 函数
+    const getSms = () => {
+      if (!ruleForm.username) {
+        root.$message.error('邮箱不能为空')
+        return false
+      }
+      if (!validateEmail(ruleForm.username)) {
+        root.$message.error('邮箱格式有误')
+        return false
+      }
+      let requestData = {
+        username: ruleForm.username,
+        module: module.value
+      }
+      // 修改验证码按钮状态
+      updateButtonStatus({
+        status: true,
+        text: '发送中'
+      })
+      GetSms(requestData)
+        .then(res => {
+          root.$message.success(res.message)
+          loginButtonStatus.value = false
+          countDown(3)
+        })
+        .catch(err => {
+          console.log(err.message)
+          updateButtonStatus({
+            status: false,
+            text: '发送验证码'
+          })
+          if (timer.value) {
+            clearInterval(timer.value)
+          }
+        })
+    }
+
+    // 倒计时
+    const countDown = time => {
+      if (timer.value) {
+        clearInterval(timer.value)
+      }
+      timer.value = setInterval(() => {
+        if (!time) {
+          clearInterval(timer.value)
+          updateButtonStatus({
+            status: false,
+            text: '重新发送'
+          })
+          return
+        }
+        time--
+        codeButtonStatus.text = `倒计时${time}秒`
+      }, 1000)
+    }
+    // 清除倒计时
+    const clearCountDown = () => {
+      updateButtonStatus({
+        status: false,
+        text: '发送验证码'
+      })
+      if (timer.value) {
+        clearInterval(timer.value)
       }
     }
-  },
-
-  components: {},
-
-  computed: {},
-
-  methods: {
-    toggleMenu(data) {
-      this.menuTab.forEach(element => {
+    // 切换菜单
+    const toggleMenu = data => {
+      menuTab.forEach((element, index) => {
+        if (element.txt === data.txt) {
+          if (index === 0) {
+            module.value = 'login'
+          } else {
+            module.value = 'register'
+          }
+        }
         element.current = false
       })
       data.current = true
+      console.log(module)
+      // 重置表单
+      // codeButtonStatus.text = '发送验证码'
+      // loginButtonStatus.value = true
+      resetFormData()
       // console.log(this.menuTab)
-    },
-    submitForm(formName) {
-      this.$refs[formName].validate(valid => {
+    }
+    // 清除表单数据
+    const resetFormData = () => {
+      refs['ruleForm'].resetFields()
+      clearCountDown()
+    }
+    // 更新按钮状态
+    const updateButtonStatus = params => {
+      codeButtonStatus.status = params.status
+      codeButtonStatus.text = params.text
+    }
+    const submitForm = formName => {
+      refs[formName].validate(valid => {
         if (valid) {
-          alert('submit!')
+          menuTab[0].current ? login() : register()
         } else {
           console.log('error submit!!')
           return false
         }
       })
     }
-  }
+
+    // 登录
+    const login = () => {
+      root.$store
+        .dispatch('app/login', {
+          ...ruleForm,
+          password: sha1(ruleForm.password)
+        })
+        .then(res => {
+          root.$message.success(res.message)
+          root.$router.replace('/console')
+        })
+        .catch(err => {
+          console.log(err)
+        })
+      // Login({ ...ruleForm, password: sha1(ruleForm.password) })
+      //   .then(res => {
+      //     root.$message.success(res.message)
+      //     root.$router.replace('/console')
+      //   })
+      //   .catch(err => {
+      //     console.log(err)
+      //   })
+    }
+    // 注册
+    const register = () => {
+      Register({ ...ruleForm, password: sha1(ruleForm.password) })
+        .then(res => {
+          root.$message.success(res.message)
+          toggleMenu(menuTab[0])
+          clearCountDown()
+          // 清除表单验证
+          return false
+        })
+        .catch(err => {
+          console.log(err)
+        })
+    }
+
+    onMounted(() => {})
+
+    return {
+      menuTab,
+      ruleForm,
+      rules,
+      loginButtonStatus,
+      codeButtonStatus,
+      getSms,
+      toggleMenu,
+      submitForm
+    }
+  },
+  data() {
+    return {}
+  },
+
+  components: {},
+
+  computed: {}
 }
 </script>
 

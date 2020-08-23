@@ -1,4 +1,4 @@
-const path = require('path');
+const path = require('path')
 module.exports = {
   // 基本路径
   publicPath: process.env.NODE_ENV === 'production' ? '' : './',
@@ -9,22 +9,24 @@ module.exports = {
   /** vue3.0内置了webpack所有东西，
    * webpack配置,see https://github.com/vuejs/vue-cli/blob/dev/docs/webpack.md
    **/
-  chainWebpack: (config) => {
-    const svgRule = config.module.rule("svg");
-    svgRule.uses.clear();
+  chainWebpack: config => {
+    const svgRule = config.module.rule('svg')
+    svgRule.uses.clear()
     svgRule
-      .use("svg-sprite-loader")
-      .loader("svg-sprite-loader")
+      .use('svg-sprite-loader')
+      .loader('svg-sprite-loader')
       .options({
-        symbolId: "icon-[name]",
-        include: ["./src/icons"]
-      });
+        symbolId: 'icon-[name]',
+        include: ['./src/icons']
+      })
   },
-  configureWebpack: (config) => {
-    config.resolve = { // 配置解析别名
-      extensions: ['.js', '.json', '.vue'],  // 自动添加文件名后缀
+  configureWebpack: config => {
+    config.resolve = {
+      // 配置解析别名
+      extensions: ['.js', '.json', '.vue'], // 自动添加文件名后缀
       alias: {
-        'vue': 'vue/dist/vue.js',
+        // complier
+        vue: 'vue/dist/vue.js',
         '@': path.resolve(__dirname, './src'),
         '@c': path.resolve(__dirname, './src/components')
       }
@@ -40,13 +42,13 @@ module.exports = {
     sourceMap: false,
     // css预设器配置项
     loaderOptions: {
-      sass:{
-        prependData:`@import "./src/styles/main.scss";`
+      sass: {
+        prependData: `@import "./src/styles/main.scss";`
       }
       // scss: {
       //   prependData: `@import "./src/styles/main.scss";`
       // }
-    },
+    }
     // requireModuleExtension: false
     // 启用 CSS modules for all css / pre-processor files.
     // modules: false
@@ -67,11 +69,11 @@ module.exports = {
     hot: true, // 开启热加载
     hotOnly: false,
     proxy: {
-      "/devApi": {
-        target: "http://www.web-jshtml.cn/productapi/token", //API服务器的地址
+      '/devApi': {
+        target: 'http://www.web-jshtml.cn/vue_admin_api/token', //API服务器的地址
         changeOrigin: true,
         pathRewrite: {
-          "^/devApi": ''
+          '^/devApi': ''
         }
       }
     }
